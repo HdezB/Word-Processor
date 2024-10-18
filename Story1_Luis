@@ -15,7 +15,7 @@ root.config(menu=menu_bar)
 root.mainloop() 
 
 #kiby version
-
+""" 
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.textinput import TextInput
@@ -54,3 +54,4 @@ if __name__ == "__main__":
     word_processor = WordProcessor()
     word_processor.show()
     sys.exit(app.exec_())
+"""
