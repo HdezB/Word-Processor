@@ -1,56 +1,55 @@
-
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTextEdit, QAction, QFileDialog, QMessageBox
+
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QTextEdit, QAction,
+    QFileDialog, QMessageBox, QInputDialog, QLineEdit
+)
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
 
 class WordProcessor(QMainWindow):
     def __init__(self):
         super().__init__()
-
-        
         self.setWindowTitle("Word Processor")
         self.setGeometry(100, 100, 800, 600)
 
-    
         self.text_edit = QTextEdit(self)
         self.setCentralWidget(self.text_edit)
 
-        
         self.create_menu()
 
     def create_menu(self):
-        
         menu_bar = self.menuBar()
-
-       
         file_menu = menu_bar.addMenu("File")
 
-        #New File
         new_action = QAction(QIcon(), "New", self)
         new_action.setShortcut("Ctrl+N")
         new_action.triggered.connect(self.new_file)
         file_menu.addAction(new_action)
 
-        #Open File
         open_action = QAction(QIcon(), "Open", self)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_file)
         file_menu.addAction(open_action)
 
-        # Save File
         save_action = QAction(QIcon(), "Save", self)
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_file)
         file_menu.addAction(save_action)
 
+        self.tools_menu = menu_bar.addMenu("Tools")
 
     def new_file(self):
         self.text_edit.clear()
 
     def open_file(self):
         options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open File", "", "Text Files (*.txt);;All Files (*)", options=options)
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open File", "",
+            "Text Files (*.txt);;All Files (*)",
+            options=options
+        )
 
         if file_path:
             try:
@@ -62,7 +61,11 @@ class WordProcessor(QMainWindow):
 
     def save_file(self):
         options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save File", "", "Text Files (*.txt);;All Files (*)", options=options)
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save File", "",
+            "Text Files (*.txt);;All Files (*)",
+            options=options
+        )
 
         if file_path:
             try:
@@ -73,10 +76,114 @@ class WordProcessor(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Could not save file: {e}")
 
 
+class LockdownWordProcessor(WordProcessor):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Word Processor with Lockdown")
+        self.lockdown_enabled = False
+        self.lockdown_password = None
+
+        self.add_lockdown_menu()
+
+        self.unlock_action = QAction("Unlock", self)
+        self.unlock_action.triggered.connect(self.unlock_mode)
+        self.unlock_action.setVisible(False)
+        self.menuBar().addAction(self.unlock_action)
+
+    def add_lockdown_menu(self):
+        tools_menu = self.tools_menu
+
+        lockdown_action = QAction("Enable Lockdown Mode", self)
+        lockdown_action.triggered.connect(self.enable_lockdown_mode)
+        tools_menu.addAction(lockdown_action)
+
+    def enable_lockdown_mode(self):
+        if self.lockdown_enabled:
+            QMessageBox.warning(
+                self, "Lockdown Mode", "Lockdown Mode is already enabled."
+            )
+            return
+
+        password, ok = QInputDialog.getText(
+            self,
+            "Enable Lockdown Mode",
+            "Set a password to disable Lockdown Mode:",
+            QLineEdit.Password  # Corrected here
+        )
+        if ok and password:
+            self.lockdown_password = password
+            self.lockdown_enabled = True
+
+            # Hide window decorations and make fullscreen
+            self.showFullScreen()
+            self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+            self.setWindowFlag(Qt.WindowMinimizeButtonHint, False)
+            self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
+            self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
+            self.setWindowFlag(Qt.FramelessWindowHint, True)
+            self.showFullScreen()  # Apply the changes
+
+            QMessageBox.information(
+                self,
+                "Lockdown Mode",
+                "Lockdown Mode has been activated."
+            )
+
+            # Show the unlock action
+            self.unlock_action.setVisible(True)
+        else:
+            QMessageBox.warning(
+                self,
+                "Invalid Password",
+                "You must set a password to enable Lockdown Mode."
+            )
+
+    def unlock_mode(self):
+        password, ok = QInputDialog.getText(
+            self,
+            "Unlock Mode",
+            "Enter password to unlock:",
+            QLineEdit.Password  # Corrected here
+        )
+        if ok and password == self.lockdown_password:
+            self.lockdown_enabled = False
+            self.lockdown_password = None  # Clear the password
+
+            # Restore window decorations
+            self.setWindowFlag(Qt.WindowCloseButtonHint, True)
+            self.setWindowFlag(Qt.WindowMinimizeButtonHint, True)
+            self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+            self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
+            self.setWindowFlag(Qt.FramelessWindowHint, False)
+            self.showNormal()  # Apply the changes
+
+            QMessageBox.information(
+                self,
+                "Lockdown Mode",
+                "Lockdown Mode has been deactivated."
+            )
+            self.unlock_action.setVisible(False)
+        else:
+            QMessageBox.warning(
+                self,
+                "Incorrect Password",
+                "The password you entered is incorrect."
+            )
+
+    def closeEvent(self, event):
+        if self.lockdown_enabled:
+            event.ignore()
+            QMessageBox.warning(
+                self,
+                "Lockdown Mode",
+                "You cannot close the application in Lockdown Mode."
+            )
+        else:
+            event.accept()
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    word_processor = WordProcessor()
+    word_processor = LockdownWordProcessor()
     word_processor.show()
     sys.exit(app.exec_())
-
-
