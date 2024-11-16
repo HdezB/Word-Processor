@@ -4,10 +4,96 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTextEdit,
     QFileDialog, QMessageBox, QInputDialog, QLineEdit, QAction, QUndoStack, QUndoCommand
 )
-from PyQt5.QtCore import Qt, QSize, QTimer
-from PyQt5.QtGui import QIcon, QFont, QTextCursor
+from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QRect
+from PyQt5.QtGui import QIcon, QFont, QTextCursor, QTextCharFormat, QColor, QSyntaxHighlighter, QPainter
 
+from spellchecker import SpellChecker
 
+#class for spell checker
+class CustomSpellCheckTextEdit(QTextEdit):
+    def __init__(self, spell_checker):
+        super().__init__()
+        self.spell_checker = spell_checker
+        self.spell_check_enabled = True  
+        self.misspelled_words = []  
+
+    def toggle_spell_check(self):
+        self.spell_check_enabled = not self.spell_check_enabled
+        if self.spell_check_enabled:
+            self.recheck_all_words()
+        self.viewport().update()  
+
+    def recheck_all_words(self):
+        self.misspelled_words.clear()  # Clear previous misspelled words
+        cursor = self.textCursor()
+        cursor.movePosition(QTextCursor.Start)
+
+        while not cursor.atEnd():
+            cursor.select(QTextCursor.WordUnderCursor)
+            word = cursor.selectedText()
+            clean_word = ''.join(filter(str.isalnum, word))
+            
+            if clean_word and clean_word in self.spell_checker.unknown([clean_word]):
+                self.misspelled_words.append((cursor.selectionStart(), cursor.selectionEnd()))
+            
+            cursor.movePosition(QTextCursor.NextWord)
+        self.viewport().update()
+
+    #handle key press event to trigger spell check only after full word is typed
+    def keyPressEvent(self, event):
+        super().keyPressEvent(event)
+        
+        #check if spell check is enabled
+        if not self.spell_check_enabled:
+            return
+        
+        # check if the user pressed space, punctuation, or enter
+        if event.key() in [Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter] or event.text() in ".,!?;:":
+            cursor = self.textCursor()
+            cursor.movePosition(QTextCursor.PreviousWord)
+            cursor.select(QTextCursor.WordUnderCursor)
+            word = cursor.selectedText()
+            clean_word = ''.join(filter(str.isalnum, word))
+            
+            if clean_word and clean_word in self.spell_checker.unknown([clean_word]):
+                self.misspelled_words.append((cursor.selectionStart(), cursor.selectionEnd()))
+                self.viewport().update() 
+
+    #paint being used instead of underline so spell checker does not interfere with user underline
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self.spell_check_enabled or not self.misspelled_words:
+            return
+        
+        painter = QPainter(self.viewport())
+        painter.setPen(QColor("red"))
+
+        for start, end in self.misspelled_words:
+            self.draw_red_line(start, end, painter)
+
+    #use painter to draw line indicating word was mispelled
+    def draw_red_line(self, start, end, painter):
+        document = self.document()
+
+        # Ensure positions are within the valid range
+        if start < 0 or end > document.characterCount() - 1:
+            return
+
+        cursor = self.textCursor()
+        cursor.setPosition(start)
+        word_start_rect = self.cursorRect(cursor)
+
+        cursor.setPosition(end)
+        word_end_rect = self.cursorRect(cursor)
+
+        line_start = word_start_rect.bottomLeft()
+        line_end = word_end_rect.bottomRight()
+
+        painter.drawLine(line_start, line_end)
+
+    def clear_misspelled_words(self):
+        self.misspelled_words.clear()
+        self.viewport().update()
 
 class WordProcessor(QMainWindow):
     def __init__(self):
@@ -16,13 +102,16 @@ class WordProcessor(QMainWindow):
         self.setWindowIcon(QIcon('icons/logo.png'))
         self.setGeometry(100, 100, 800, 600)
 
-        self.text_edit = QTextEdit(self)
-        
+        #initialize spell checker
+        self.spell_checker = SpellChecker()
+
+        #use the custom text edit with painted spell check lines
+        self.text_edit = CustomSpellCheckTextEdit(self.spell_checker)
         self.setCentralWidget(self.text_edit)
 
         self.create_menu()
         self.create_toolBar()
-        
+
 
     def create_menu(self):
         menu_bar = self.menuBar()
@@ -108,7 +197,7 @@ class WordProcessor(QMainWindow):
         toolBar.addAction(paste)
 
         toolBar.addSeparator()
-        self.bold = QAction(QIcon("icons/bold_icon.png"), "Bold", self)
+        self.bold = QAction(QIcon("icons/bold_transition_icon.png"), "Bold", self)
         self.bold.setShortcut("Ctrl+B")
         self.bold.triggered.connect(self.toggle_bold)
         toolBar.addAction(self.bold)
@@ -123,6 +212,18 @@ class WordProcessor(QMainWindow):
         strikethrough.triggered.connect(self.toggle_strikethrough)
         toolBar.addAction(strikethrough)
         toolBar.addSeparator()
+
+        #spell Check Toggle Button
+        self.spell_check_action = QAction(QIcon("icons/spell_check_icon.png"), "Toggle Spell Check", self)
+        self.spell_check_action.setCheckable(True)
+        self.spell_check_action.setChecked(True)  # Default: Enabled
+        self.spell_check_action.triggered.connect(self.toggle_spell_check)
+        toolBar.addAction(self.spell_check_action)
+
+    #function to toggle spell check
+    def toggle_spell_check(self):
+        self.text_edit.toggle_spell_check()
+
 
     def toggle_copy(self):
         clipboard = QApplication.clipboard()
