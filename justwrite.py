@@ -2,47 +2,119 @@ import sys
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTextEdit,
-    QFileDialog, QMessageBox, QInputDialog, QLineEdit, QAction, QUndoStack, QUndoCommand
+    QFileDialog, QMessageBox, QInputDialog, QLineEdit, QAction, QUndoStack, QUndoCommand, QFontDialog, QShortcut, QFontComboBox, QLabel, QMenu, QComboBox
 )
 from PyQt5.QtCore import Qt, QSize, QTimer
-from PyQt5.QtGui import QIcon, QFont, QTextCursor
-
+from PyQt5.QtGui import QIcon, QFont, QTextCursor, QTextBlockFormat, QKeySequence, QFontDatabase
 
 
 class WordProcessor(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Just Write")
+        self.setWindowTitle("JustWrite")
         self.setWindowIcon(QIcon('icons/logo.png'))
         self.setGeometry(100, 100, 800, 600)
 
         self.text_edit = QTextEdit(self)
-        
+
         self.setCentralWidget(self.text_edit)
 
         self.create_menu()
         self.create_toolBar()
-        
 
     def create_menu(self):
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("File")
-
-        new_action = QAction(QIcon(), "New", self)
-        new_action.setShortcut("Ctrl+N")
-        new_action.triggered.connect(self.new_file)
-        file_menu.addAction(new_action)
-
-        open_action = QAction(QIcon(), "Open", self)
+        edit_menu = menu_bar.addMenu("Edit")
+        format_menu = menu_bar.addMenu("Format")
+        layout_menu = menu_bar.addMenu("Layout")
+        
+        # New File
+        self.new_action = QAction(QIcon("icons/new_file_icon.png"), "New", self)
+        self.new_action.setShortcut("Ctrl+N")
+        self.new_action.triggered.connect(self.new_file)
+        # Open File
+        open_action = QAction(QIcon("icons/open_folder_icon.png"), "Open", self)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_file)
-        file_menu.addAction(open_action)
+        # Save File
+        self.save_action = QAction(QIcon("icons/save_icon.png"), "Save", self)
+        self.save_action.setShortcut("Ctrl+S")
+        self.save_action.triggered.connect(self.save_file)
+        # Exit File
+        exit_action = QAction(QIcon("icons/exit_icon.png"), "Exit", self)
+        exit_action.triggered.connect(self.close)
 
-        save_action = QAction(QIcon(), "Save", self)
-        save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self.save_file)
-        file_menu.addAction(save_action)
+        file_menu.addActions([self.new_action, open_action, self.save_action, exit_action])
+        
+        # Edit Menu Bar
+        # Copy
+        # <a href="https://www.freepik.com/search">Icon by Anggara</a>
+        self.copy_action = QAction(QIcon("icons/copy_icon.png"), "Copy", self)
+        self.copy_action.setShortcut("Ctrl+C")
+        self.copy_action.triggered.connect(self.toggle_copy)
 
+        # Paste
+        # <a href="https://www.freepik.com/search">Icon by Pixel perfect</a>
+        self.paste_action = QAction(QIcon("icons/paste_icon.png"), "Paste", self)
+        self.paste_action.setShortcut("Ctrl+V")
+        self.paste_action.triggered.connect(self.toggle_paste)
+
+        # Cut
+        self.cut_action = QAction(QIcon("icons/cut_icon.png"), "Cut", self)
+        self.cut_action.setShortcut("Ctrl+X")
+        self.cut_action.triggered.connect(self.toggle_cut)
+
+        edit_menu.addActions([self.copy_action, self.paste_action, self.cut_action])
+        
+        # Format Menu
+        # Bold
+        self.bold_action = QAction(QIcon("icons/bold_icon.png"), "Bold", self)
+        self.bold_action.setShortcut("Ctrl+B")
+        self.bold_action.triggered.connect(self.toggle_bold)
+
+        # Italic
+        self.italic_action = QAction(QIcon("icons/italic_icon.png"), "Italic", self)
+        self.italic_action.setShortcut("Ctrl+I")
+        self.italic_action.triggered.connect(self.toggle_italic)
+
+        # Underline
+        self.underline_action = QAction(
+            QIcon("icons/underline_icon.png"), "Underline", self)
+        self.underline_action.setShortcut("Ctrl+U")
+        self.underline_action.triggered.connect(self.toggle_underline)
+
+        # Strikethrough
+        self.strikethrough_action = QAction(
+            QIcon("icons/strikethrough_icon.png"), "Strikethrough", self)
+        self.strikethrough_action.setShortcut("Ctrl+Shift+S")
+        self.strikethrough_action.triggered.connect(self.toggle_strikethrough)
+
+        format_menu.addActions([self.bold_action, self.italic_action, self.underline_action, self.strikethrough_action])
+        
+        # Layout
+        self.align_left = QAction(QIcon("icons/align_left.png"), "Align Left", self)
+        self.align_left.setCheckable(True)
+        self.align_left.setChecked(True)
+        self.align_left.triggered.connect(self.toggle_align_left)
+
+        self.align_center = QAction(
+            QIcon("icons/align_center.png"), "Align Center", self)
+        self.align_center.setCheckable(True)
+        self.align_center.triggered.connect(self.toggle_align_center)
+
+        self.align_right = QAction(
+            QIcon("icons/align_right.png"), "Align Right", self)
+        self.align_right.setCheckable(True)
+        self.align_right.triggered.connect(self.toggle_align_right)
+
+        self.align_justify = QAction(
+            QIcon("icons/align_justify.png"), "Align Justify", self)
+        self.align_justify.setCheckable(True)
+        self.align_justify.triggered.connect(self.toggle_align_justify)
+
+        layout_menu.addActions([self.align_left, self.align_center, self.align_right, self.align_justify])
+        
         self.tools_menu = menu_bar.addMenu("Tools")
 
     def new_file(self):
@@ -93,36 +165,103 @@ class WordProcessor(QMainWindow):
 
     def create_toolBar(self):
         toolBar = self.addToolBar("Bold")
-        toolBar.setIconSize(QSize(16, 16))
-        
+        toolBar.setIconSize(QSize(17, 17))
+        toolBar.addActions([self.new_action, self.save_action])
         toolBar.addSeparator()
-        # <a href="https://www.freepik.com/search">Icon by Anggara</a>
-        copy = QAction(QIcon("icons/copy_icon.png"), "Copy", self)
-        copy.setShortcut("Ctrl+C")
-        copy.triggered.connect(self.toggle_copy)
-        toolBar.addAction(copy)
-        # <a href="https://www.freepik.com/search">Icon by Pixel perfect</a>
-        paste = QAction(QIcon("icons/paste_icon.png"), "Paste", self)
-        paste.setShortcut("Ctrl+V")
-        paste.triggered.connect(self.toggle_paste)
-        toolBar.addAction(paste)
+        toolBar.addActions([self.copy_action, self.paste_action])
 
         toolBar.addSeparator()
-        self.bold = QAction(QIcon("icons/bold_icon.png"), "Bold", self)
-        self.bold.setShortcut("Ctrl+B")
-        self.bold.triggered.connect(self.toggle_bold)
-        toolBar.addAction(self.bold)
-        italic = QAction(QIcon("icons/italic_icon.png"), "Italic", self)
-        italic.setShortcut("Ctrl+I")
-        italic.triggered.connect(self.toggle_italic)
-        toolBar.addAction(italic)
-        underline = QAction(QIcon("icons/underline_icon.png"), "Underline", self)
-        underline.triggered.connect(self.toggle_underline)
-        toolBar.addAction(underline)
-        strikethrough = QAction(QIcon("icons/strikethrough_icon.png"), "Strikethrough", self)
-        strikethrough.triggered.connect(self.toggle_strikethrough)
-        toolBar.addAction(strikethrough)
+        self.font_combo_box = QFontComboBox(self)
+        self.font_size_combo_box = QComboBox(self)
+        self.font_size_combo_box.addItems(
+            [str(size) for size in range(8, 65, 2)])
+        self.font_combo_box.currentFontChanged.connect(self.change_font)
+        self.font_size_combo_box.currentTextChanged.connect(
+            self.change_font_size)
+        toolBar.addWidget(self.font_combo_box)
+        toolBar.addWidget(self.font_size_combo_box)
         toolBar.addSeparator()
+        toolBar.addActions([self.bold_action, self.italic_action,
+                           self.underline_action, self.strikethrough_action])
+        toolBar.addSeparator()
+        toolBar.addActions([self.align_left, self.align_center,
+                           self.align_right, self.align_justify])
+
+    def toggle_align_right(self):
+        cursor = self.text_edit.textCursor()
+        if self.align_justify.isChecked:
+            self.align_justify.setChecked(False)
+        if self.align_center.isChecked:
+            self.align_center.setChecked(False)
+        if self.align_left.isChecked:
+            self.align_left.setChecked(False)
+        self.align_right.setChecked(True)
+        if cursor.hasSelection():
+            block_format = QTextBlockFormat()
+            block_format.setAlignment(Qt.AlignRight)
+            cursor.mergeBlockFormat(block_format)
+            self.text_edit.setTextCursor(cursor)
+        else:
+            self.text_edit.setAlignment(Qt.AlignRight)
+
+    def toggle_align_left(self):
+        if self.align_justify.isChecked:
+            self.align_justify.setChecked(False)
+        if self.align_center.isChecked:
+            self.align_center.setChecked(False)
+        if self.align_right.isChecked:
+            self.align_right.setChecked(False)
+        self.align_left.setChecked(True)
+        cursor = self.text_edit.textCursor()
+        if cursor.hasSelection():
+            block_format = QTextBlockFormat()
+            block_format.setAlignment(Qt.AlignLeft)
+            cursor.mergeBlockFormat(block_format)
+            self.text_edit.setTextCursor(cursor)
+        else:
+            self.text_edit.setAlignment(Qt.AlignLeft)
+
+    def toggle_align_center(self):
+        if self.align_justify.isChecked:
+            self.align_justify.setChecked(False)
+        if self.align_right.isChecked:
+            self.align_right.setChecked(False)
+        if self.align_left.isChecked:
+            self.align_left.setChecked(False)
+        self.align_center.setChecked(True)
+        cursor = self.text_edit.textCursor()
+        if cursor.hasSelection():
+            block_format = QTextBlockFormat()
+            block_format.setAlignment(Qt.AlignCenter)
+            cursor.mergeBlockFormat(block_format)
+            self.text_edit.setTextCursor(cursor)
+        else:
+            self.text_edit.setAlignment(Qt.AlignCenter)
+
+    def toggle_align_justify(self):
+        if self.align_right.isChecked:
+            self.align_right.setChecked(False)
+        if self.align_center.isChecked:
+            self.align_center.setChecked(False)
+        if self.align_left.isChecked:
+            self.align_left.setChecked(False)
+        self.align_justify.setChecked(True)
+        cursor = self.text_edit.textCursor()
+        if cursor.hasSelection():
+            block_format = QTextBlockFormat()
+            block_format.setAlignment(Qt.AlignJustify)
+            cursor.mergeBlockFormat(block_format)
+            self.text_edit.setTextCursor(cursor)
+        else:
+            self.text_edit.setAlignment(Qt.AlignJustify)
+
+    def change_font(self, font: QFont):
+        self.text_edit.setCurrentFont(font)
+
+    def change_font_size(self, size: str):
+        font = self.text_edit.currentFont()
+        font.setPointSize(int(size))
+        self.text_edit.setCurrentFont(font)
 
     def toggle_copy(self):
         clipboard = QApplication.clipboard()
@@ -131,6 +270,11 @@ class WordProcessor(QMainWindow):
     def toggle_paste(self):
         clipboard = QApplication.clipboard()
         self.text_edit.textCursor().insertHtml(clipboard.text())
+
+    def toggle_cut(self):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self.text_edit.textCursor().selection().toHtml())
+        self.text_edit.textCursor().removeSelectedText()
 
     def left_to_right_select(self, cursor):
         if cursor.hasSelection() and not cursor.atBlockStart() and cursor.position() == cursor.selectionStart():
@@ -181,6 +325,7 @@ class WordProcessor(QMainWindow):
             char_format.setFontStrikeOut(True)
         cursor.mergeCharFormat(char_format)
         self.text_edit.setTextCursor(cursor)
+
 
 class LockdownWordProcessor(WordProcessor):
     def __init__(self):
@@ -285,7 +430,16 @@ class LockdownWordProcessor(WordProcessor):
                 "You cannot close the application in Lockdown Mode."
             )
         else:
-            event.accept()
+            reply = QMessageBox.question(self, "Exit Confirmation",
+                                     "Are you sure you want to exit?",
+                                     QMessageBox.Yes | QMessageBox.Save | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                event.accept()
+            elif reply == QMessageBox.Save:
+                self.save_file()
+                event.accept()
+            else:
+                event.ignore()
 
 
 if __name__ == "__main__":
