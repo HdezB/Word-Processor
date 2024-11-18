@@ -4,8 +4,9 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTextEdit,
     QFileDialog, QMessageBox, QInputDialog, QLineEdit, QAction, QUndoStack, QUndoCommand, QFontDialog, QShortcut, QFontComboBox, QLabel, QMenu, QComboBox
 )
+from PyQt5.QtWidgets import QWidget, QVBoxLayout
 from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QRect
-from PyQt5.QtGui import QIcon, QFont, QTextCursor, QTextBlockFormat, QKeySequence, QFontDatabase, QTextCharFormat, QColor, QSyntaxHighlighter, QPainter
+from PyQt5.QtGui import QIcon, QFont, QTextCursor, QTextBlockFormat, QKeySequence, QFontDatabase, QTextCharFormat, QColor, QSyntaxHighlighter, QPainter, QScreen
 
 from spellchecker import SpellChecker
 
@@ -108,13 +109,58 @@ class WordProcessor(QMainWindow):
         self.setWindowIcon(QIcon('icons/logo.png'))
         self.setGeometry(100, 100, 800, 600)
 
-        #initialize spell checker
+        # Initialize spell checker
         self.spell_checker = SpellChecker()
 
-        #use the custom text edit with painted spell check lines
-        self.text_edit = CustomSpellCheckTextEdit(self.spell_checker)
-        self.setCentralWidget(self.text_edit)
+        # Get the screen DPI
+        screen = QApplication.primaryScreen()
+        dpi = screen.logicalDotsPerInch() 
 
+        # Calculate page dimensions based on DPI
+        page_width = int(8.5 * dpi)  # 8.5 inches wide
+        page_height = int(11 * dpi)  # 11 inches tall
+        margin_pixels = int(1 * dpi)  # 1 inch margins
+
+        # Create page view
+        self.page_widget = QWidget(self)
+        self.page_widget.setStyleSheet("""
+            background: white;
+            border: 1px solid #ccc;
+        """)
+        self.page_widget.setFixedSize(page_width, page_height)
+
+        # Create the text editor
+        self.text_edit = CustomSpellCheckTextEdit(self.spell_checker)
+        self.text_edit.setFont(QFont("Times New Roman", 12))  # Default font
+        self.text_edit.setStyleSheet("background: transparent;")  # Match text area with the page
+        self.text_edit.setFrameShape(QTextEdit.NoFrame)  # Remove extra borders
+
+        # Set text margins using QTextFrame
+        doc = self.text_edit.document()
+        root_frame = doc.rootFrame()
+        frame_format = root_frame.frameFormat()
+        margin_bias = 8
+        frame_format.setLeftMargin(margin_pixels-margin_bias)
+        frame_format.setRightMargin(margin_pixels-margin_bias)
+        frame_format.setTopMargin(margin_pixels-margin_bias)
+        frame_format.setBottomMargin(margin_pixels-margin_bias)
+        root_frame.setFrameFormat(frame_format)
+
+        # Use layout to embed text editor in the page
+        page_layout = QVBoxLayout(self.page_widget)
+        page_layout.setContentsMargins(0, 0, 0, 0)  # No extra margins around the editor
+        page_layout.addWidget(self.text_edit)
+
+        # Create a container to center the page
+        self.page_container = QWidget(self)
+        self.page_container.setStyleSheet("background: #eaeaea;")  # Workspace background
+        container_layout = QVBoxLayout(self.page_container)
+        container_layout.addWidget(self.page_widget, alignment=Qt.AlignCenter)
+
+        # Set the container as the central widget
+        self.setCentralWidget(self.page_container)
+
+        # Create menus and toolbars
         self.create_menu()
         self.create_toolBar()
 
