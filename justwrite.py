@@ -2,10 +2,10 @@ import sys
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTextEdit,
-    QFileDialog, QMessageBox, QInputDialog, QLineEdit, QAction, QUndoStack, QUndoCommand
+    QFileDialog, QMessageBox, QInputDialog, QLineEdit, QAction, QUndoStack, QUndoCommand, QFontDialog, QShortcut, QFontComboBox, QLabel, QMenu, QComboBox
 )
 from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QRect
-from PyQt5.QtGui import QIcon, QFont, QTextCursor, QTextCharFormat, QColor, QSyntaxHighlighter, QPainter
+from PyQt5.QtGui import QIcon, QFont, QTextCursor, QTextBlockFormat, QKeySequence, QFontDatabase, QTextCharFormat, QColor, QSyntaxHighlighter, QPainter
 
 from spellchecker import SpellChecker
 
@@ -14,14 +14,17 @@ class CustomSpellCheckTextEdit(QTextEdit):
     def __init__(self, spell_checker):
         super().__init__()
         self.spell_checker = spell_checker
-        self.spell_check_enabled = True  
-        self.misspelled_words = []  
+        self.spell_check_enabled = True
+        self.misspelled_words = []
+
+        # Connect textChanged signal to recheck misspelled words
+        self.document().contentsChange.connect(self.handle_contents_change)
 
     def toggle_spell_check(self):
         self.spell_check_enabled = not self.spell_check_enabled
         if self.spell_check_enabled:
             self.recheck_all_words()
-        self.viewport().update()  
+        self.viewport().update()
 
     def recheck_all_words(self):
         self.misspelled_words.clear()  # Clear previous misspelled words
@@ -39,15 +42,13 @@ class CustomSpellCheckTextEdit(QTextEdit):
             cursor.movePosition(QTextCursor.NextWord)
         self.viewport().update()
 
-    #handle key press event to trigger spell check only after full word is typed
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
-        
-        #check if spell check is enabled
+
         if not self.spell_check_enabled:
             return
-        
-        # check if the user pressed space, punctuation, or enter
+
+        # Recheck the last word when certain keys are pressed
         if event.key() in [Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter] or event.text() in ".,!?;:":
             cursor = self.textCursor()
             cursor.movePosition(QTextCursor.PreviousWord)
@@ -57,9 +58,15 @@ class CustomSpellCheckTextEdit(QTextEdit):
             
             if clean_word and clean_word in self.spell_checker.unknown([clean_word]):
                 self.misspelled_words.append((cursor.selectionStart(), cursor.selectionEnd()))
-                self.viewport().update() 
+            self.viewport().update()
 
-    #paint being used instead of underline so spell checker does not interfere with user underline
+    def handle_contents_change(self, position, chars_removed, chars_added):
+        """
+        Handle content changes to update misspelled words.
+        """
+        # Clear misspelled words affected by the change
+        self.recheck_all_words()
+
     def paintEvent(self, event):
         super().paintEvent(event)
         if not self.spell_check_enabled or not self.misspelled_words:
@@ -71,11 +78,9 @@ class CustomSpellCheckTextEdit(QTextEdit):
         for start, end in self.misspelled_words:
             self.draw_red_line(start, end, painter)
 
-    #use painter to draw line indicating word was mispelled
     def draw_red_line(self, start, end, painter):
         document = self.document()
 
-        # Ensure positions are within the valid range
         if start < 0 or end > document.characterCount() - 1:
             return
 
@@ -86,10 +91,11 @@ class CustomSpellCheckTextEdit(QTextEdit):
         cursor.setPosition(end)
         word_end_rect = self.cursorRect(cursor)
 
-        line_start = word_start_rect.bottomLeft()
-        line_end = word_end_rect.bottomRight()
-
-        painter.drawLine(line_start, line_end)
+        # Prevent the underline from extending beyond the current line
+        if word_start_rect.top() == word_end_rect.top():
+            line_start = word_start_rect.bottomLeft()
+            line_end = word_end_rect.bottomRight()
+            painter.drawLine(line_start, line_end)
 
     def clear_misspelled_words(self):
         self.misspelled_words.clear()
@@ -98,7 +104,7 @@ class CustomSpellCheckTextEdit(QTextEdit):
 class WordProcessor(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Just Write")
+        self.setWindowTitle("JustWrite")
         self.setWindowIcon(QIcon('icons/logo.png'))
         self.setGeometry(100, 100, 800, 600)
 
@@ -112,26 +118,99 @@ class WordProcessor(QMainWindow):
         self.create_menu()
         self.create_toolBar()
 
-
     def create_menu(self):
         menu_bar = self.menuBar()
         file_menu = menu_bar.addMenu("File")
-
-        new_action = QAction(QIcon(), "New", self)
-        new_action.setShortcut("Ctrl+N")
-        new_action.triggered.connect(self.new_file)
-        file_menu.addAction(new_action)
-
-        open_action = QAction(QIcon(), "Open", self)
+        edit_menu = menu_bar.addMenu("Edit")
+        format_menu = menu_bar.addMenu("Format")
+        layout_menu = menu_bar.addMenu("Layout")
+        
+        # New File
+        self.new_action = QAction(QIcon("icons/new_file_icon.png"), "New", self)
+        self.new_action.setShortcut("Ctrl+N")
+        self.new_action.triggered.connect(self.new_file)
+        # Open File
+        open_action = QAction(QIcon("icons/open_folder_icon.png"), "Open", self)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_file)
-        file_menu.addAction(open_action)
+        # Save File
+        self.save_action = QAction(QIcon("icons/save_icon.png"), "Save", self)
+        self.save_action.setShortcut("Ctrl+S")
+        self.save_action.triggered.connect(self.save_file)
+        # Exit File
+        exit_action = QAction(QIcon("icons/exit_icon.png"), "Exit", self)
+        exit_action.triggered.connect(self.close)
 
-        save_action = QAction(QIcon(), "Save", self)
-        save_action.setShortcut("Ctrl+S")
-        save_action.triggered.connect(self.save_file)
-        file_menu.addAction(save_action)
+        file_menu.addActions([self.new_action, open_action, self.save_action, exit_action])
+        
+        # Edit Menu Bar
+        # Copy
+        # <a href="https://www.freepik.com/search">Icon by Anggara</a>
+        self.copy_action = QAction(QIcon("icons/copy_icon.png"), "Copy", self)
+        self.copy_action.setShortcut("Ctrl+C")
+        self.copy_action.triggered.connect(self.toggle_copy)
 
+        # Paste
+        # <a href="https://www.freepik.com/search">Icon by Pixel perfect</a>
+        self.paste_action = QAction(QIcon("icons/paste_icon.png"), "Paste", self)
+        self.paste_action.setShortcut("Ctrl+V")
+        self.paste_action.triggered.connect(self.toggle_paste)
+
+        # Cut
+        self.cut_action = QAction(QIcon("icons/cut_icon.png"), "Cut", self)
+        self.cut_action.setShortcut("Ctrl+X")
+        self.cut_action.triggered.connect(self.toggle_cut)
+
+        edit_menu.addActions([self.copy_action, self.paste_action, self.cut_action])
+        
+        # Format Menu
+        # Bold
+        self.bold_action = QAction(QIcon("icons/bold_icon.png"), "Bold", self)
+        self.bold_action.setShortcut("Ctrl+B")
+        self.bold_action.triggered.connect(self.toggle_bold)
+
+        # Italic
+        self.italic_action = QAction(QIcon("icons/italic_icon.png"), "Italic", self)
+        self.italic_action.setShortcut("Ctrl+I")
+        self.italic_action.triggered.connect(self.toggle_italic)
+
+        # Underline
+        self.underline_action = QAction(
+            QIcon("icons/underline_icon.png"), "Underline", self)
+        self.underline_action.setShortcut("Ctrl+U")
+        self.underline_action.triggered.connect(self.toggle_underline)
+
+        # Strikethrough
+        self.strikethrough_action = QAction(
+            QIcon("icons/strikethrough_icon.png"), "Strikethrough", self)
+        self.strikethrough_action.setShortcut("Ctrl+Shift+S")
+        self.strikethrough_action.triggered.connect(self.toggle_strikethrough)
+
+        format_menu.addActions([self.bold_action, self.italic_action, self.underline_action, self.strikethrough_action])
+        
+        # Layout
+        self.align_left = QAction(QIcon("icons/align_left.png"), "Align Left", self)
+        self.align_left.setCheckable(True)
+        self.align_left.setChecked(True)
+        self.align_left.triggered.connect(self.toggle_align_left)
+
+        self.align_center = QAction(
+            QIcon("icons/align_center.png"), "Align Center", self)
+        self.align_center.setCheckable(True)
+        self.align_center.triggered.connect(self.toggle_align_center)
+
+        self.align_right = QAction(
+            QIcon("icons/align_right.png"), "Align Right", self)
+        self.align_right.setCheckable(True)
+        self.align_right.triggered.connect(self.toggle_align_right)
+
+        self.align_justify = QAction(
+            QIcon("icons/align_justify.png"), "Align Justify", self)
+        self.align_justify.setCheckable(True)
+        self.align_justify.triggered.connect(self.toggle_align_justify)
+
+        layout_menu.addActions([self.align_left, self.align_center, self.align_right, self.align_justify])
+        
         self.tools_menu = menu_bar.addMenu("Tools")
 
     def new_file(self):
@@ -182,48 +261,115 @@ class WordProcessor(QMainWindow):
 
     def create_toolBar(self):
         toolBar = self.addToolBar("Bold")
-        toolBar.setIconSize(QSize(16, 16))
+        toolBar.setIconSize(QSize(17, 17))
+        toolBar.addActions([self.new_action, self.save_action])
+        toolBar.addSeparator()
+        toolBar.addActions([self.copy_action, self.paste_action])
+
+        toolBar.addSeparator()
+        self.font_combo_box = QFontComboBox(self)
+        self.font_size_combo_box = QComboBox(self)
+        self.font_size_combo_box.addItems(
+            [str(size) for size in range(8, 65, 2)])
+        self.font_combo_box.currentFontChanged.connect(self.change_font)
+        self.font_size_combo_box.currentTextChanged.connect(
+            self.change_font_size)
+        toolBar.addWidget(self.font_combo_box)
+        toolBar.addWidget(self.font_size_combo_box)
+        toolBar.addSeparator()
+        toolBar.addActions([self.bold_action, self.italic_action,
+                           self.underline_action, self.strikethrough_action])
+        toolBar.addSeparator()
+        toolBar.addActions([self.align_left, self.align_center,
+                           self.align_right, self.align_justify])
         
-        toolBar.addSeparator()
-        # <a href="https://www.freepik.com/search">Icon by Anggara</a>
-        copy = QAction(QIcon("icons/copy_icon.png"), "Copy", self)
-        copy.setShortcut("Ctrl+C")
-        copy.triggered.connect(self.toggle_copy)
-        toolBar.addAction(copy)
-        # <a href="https://www.freepik.com/search">Icon by Pixel perfect</a>
-        paste = QAction(QIcon("icons/paste_icon.png"), "Paste", self)
-        paste.setShortcut("Ctrl+V")
-        paste.triggered.connect(self.toggle_paste)
-        toolBar.addAction(paste)
-
-        toolBar.addSeparator()
-        self.bold = QAction(QIcon("icons/bold_transition_icon.png"), "Bold", self)
-        self.bold.setShortcut("Ctrl+B")
-        self.bold.triggered.connect(self.toggle_bold)
-        toolBar.addAction(self.bold)
-        italic = QAction(QIcon("icons/italic_icon.png"), "Italic", self)
-        italic.setShortcut("Ctrl+I")
-        italic.triggered.connect(self.toggle_italic)
-        toolBar.addAction(italic)
-        underline = QAction(QIcon("icons/underline_icon.png"), "Underline", self)
-        underline.triggered.connect(self.toggle_underline)
-        toolBar.addAction(underline)
-        strikethrough = QAction(QIcon("icons/strikethrough_icon.png"), "Strikethrough", self)
-        strikethrough.triggered.connect(self.toggle_strikethrough)
-        toolBar.addAction(strikethrough)
-        toolBar.addSeparator()
-
         #spell Check Toggle Button
+        toolBar.addSeparator() 
         self.spell_check_action = QAction(QIcon("icons/spell_check_icon.png"), "Toggle Spell Check", self)
         self.spell_check_action.setCheckable(True)
         self.spell_check_action.setChecked(True)  # Default: Enabled
         self.spell_check_action.triggered.connect(self.toggle_spell_check)
         toolBar.addAction(self.spell_check_action)
 
+    def toggle_align_right(self):
+        cursor = self.text_edit.textCursor()
+        if self.align_justify.isChecked:
+            self.align_justify.setChecked(False)
+        if self.align_center.isChecked:
+            self.align_center.setChecked(False)
+        if self.align_left.isChecked:
+            self.align_left.setChecked(False)
+        self.align_right.setChecked(True)
+        if cursor.hasSelection():
+            block_format = QTextBlockFormat()
+            block_format.setAlignment(Qt.AlignRight)
+            cursor.mergeBlockFormat(block_format)
+            self.text_edit.setTextCursor(cursor)
+        else:
+            self.text_edit.setAlignment(Qt.AlignRight)
+
+    def toggle_align_left(self):
+        if self.align_justify.isChecked:
+            self.align_justify.setChecked(False)
+        if self.align_center.isChecked:
+            self.align_center.setChecked(False)
+        if self.align_right.isChecked:
+            self.align_right.setChecked(False)
+        self.align_left.setChecked(True)
+        cursor = self.text_edit.textCursor()
+        if cursor.hasSelection():
+            block_format = QTextBlockFormat()
+            block_format.setAlignment(Qt.AlignLeft)
+            cursor.mergeBlockFormat(block_format)
+            self.text_edit.setTextCursor(cursor)
+        else:
+            self.text_edit.setAlignment(Qt.AlignLeft)
+
+    def toggle_align_center(self):
+        if self.align_justify.isChecked:
+            self.align_justify.setChecked(False)
+        if self.align_right.isChecked:
+            self.align_right.setChecked(False)
+        if self.align_left.isChecked:
+            self.align_left.setChecked(False)
+        self.align_center.setChecked(True)
+        cursor = self.text_edit.textCursor()
+        if cursor.hasSelection():
+            block_format = QTextBlockFormat()
+            block_format.setAlignment(Qt.AlignCenter)
+            cursor.mergeBlockFormat(block_format)
+            self.text_edit.setTextCursor(cursor)
+        else:
+            self.text_edit.setAlignment(Qt.AlignCenter)
+
+    def toggle_align_justify(self):
+        if self.align_right.isChecked:
+            self.align_right.setChecked(False)
+        if self.align_center.isChecked:
+            self.align_center.setChecked(False)
+        if self.align_left.isChecked:
+            self.align_left.setChecked(False)
+        self.align_justify.setChecked(True)
+        cursor = self.text_edit.textCursor()
+        if cursor.hasSelection():
+            block_format = QTextBlockFormat()
+            block_format.setAlignment(Qt.AlignJustify)
+            cursor.mergeBlockFormat(block_format)
+            self.text_edit.setTextCursor(cursor)
+        else:
+            self.text_edit.setAlignment(Qt.AlignJustify)
+
+    def change_font(self, font: QFont):
+        self.text_edit.setCurrentFont(font)
+
+    def change_font_size(self, size: str):
+        font = self.text_edit.currentFont()
+        font.setPointSize(int(size))
+        self.text_edit.setCurrentFont(font)
+
     #function to toggle spell check
     def toggle_spell_check(self):
         self.text_edit.toggle_spell_check()
-
 
     def toggle_copy(self):
         clipboard = QApplication.clipboard()
@@ -232,6 +378,11 @@ class WordProcessor(QMainWindow):
     def toggle_paste(self):
         clipboard = QApplication.clipboard()
         self.text_edit.textCursor().insertHtml(clipboard.text())
+
+    def toggle_cut(self):
+        clipboard = QApplication.clipboard()
+        clipboard.setText(self.text_edit.textCursor().selection().toHtml())
+        self.text_edit.textCursor().removeSelectedText()
 
     def left_to_right_select(self, cursor):
         if cursor.hasSelection() and not cursor.atBlockStart() and cursor.position() == cursor.selectionStart():
@@ -282,6 +433,7 @@ class WordProcessor(QMainWindow):
             char_format.setFontStrikeOut(True)
         cursor.mergeCharFormat(char_format)
         self.text_edit.setTextCursor(cursor)
+
 
 class LockdownWordProcessor(WordProcessor):
     def __init__(self):
@@ -386,7 +538,16 @@ class LockdownWordProcessor(WordProcessor):
                 "You cannot close the application in Lockdown Mode."
             )
         else:
-            event.accept()
+            reply = QMessageBox.question(self, "Exit Confirmation",
+                                     "Are you sure you want to exit?",
+                                     QMessageBox.Yes | QMessageBox.Save | QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                event.accept()
+            elif reply == QMessageBox.Save:
+                self.save_file()
+                event.accept()
+            else:
+                event.ignore()
 
 
 if __name__ == "__main__":
