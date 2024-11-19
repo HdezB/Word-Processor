@@ -1,12 +1,15 @@
 import sys
 
+import re 
+
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTextEdit,
     QFileDialog, QMessageBox, QInputDialog, QLineEdit, QAction, QUndoStack, QUndoCommand, QFontDialog, QShortcut, QFontComboBox, QLabel, QMenu, QComboBox
 )
-from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSpacerItem, QSizePolicy
 from PyQt5.QtCore import Qt, QSize, QTimer, QEvent, QRect
 from PyQt5.QtGui import QIcon, QFont, QTextCursor, QTextBlockFormat, QKeySequence, QFontDatabase, QTextCharFormat, QColor, QSyntaxHighlighter, QPainter, QScreen
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 
 from spellchecker import SpellChecker
 
@@ -18,6 +21,10 @@ class CustomSpellCheckTextEdit(QTextEdit):
         self.spell_check_enabled = True
         self.misspelled_words = []
 
+        custom_words = ["ok", "functionalities"]
+        for word in custom_words:
+            self.spell_checker.word_frequency.add(word)
+
         # Connect textChanged signal to recheck misspelled words
         self.document().contentsChange.connect(self.handle_contents_change)
 
@@ -28,7 +35,14 @@ class CustomSpellCheckTextEdit(QTextEdit):
         self.viewport().update()
 
     def recheck_all_words(self):
+        """
+        Efficiently rechecks misspelled words.
+        """
         self.misspelled_words.clear()  # Clear previous misspelled words
+
+        if not self.spell_check_enabled:
+            return
+
         cursor = self.textCursor()
         cursor.movePosition(QTextCursor.Start)
 
@@ -36,43 +50,31 @@ class CustomSpellCheckTextEdit(QTextEdit):
             cursor.select(QTextCursor.WordUnderCursor)
             word = cursor.selectedText()
             clean_word = ''.join(filter(str.isalnum, word))
-            
+
             if clean_word and clean_word in self.spell_checker.unknown([clean_word]):
                 self.misspelled_words.append((cursor.selectionStart(), cursor.selectionEnd()))
-            
+
             cursor.movePosition(QTextCursor.NextWord)
-        self.viewport().update()
-
-    def keyPressEvent(self, event):
-        super().keyPressEvent(event)
-
-        if not self.spell_check_enabled:
-            return
-
-        # Recheck the last word when certain keys are pressed
-        if event.key() in [Qt.Key_Space, Qt.Key_Return, Qt.Key_Enter] or event.text() in ".,!?;:":
-            cursor = self.textCursor()
-            cursor.movePosition(QTextCursor.PreviousWord)
-            cursor.select(QTextCursor.WordUnderCursor)
-            word = cursor.selectedText()
-            clean_word = ''.join(filter(str.isalnum, word))
-            
-            if clean_word and clean_word in self.spell_checker.unknown([clean_word]):
-                self.misspelled_words.append((cursor.selectionStart(), cursor.selectionEnd()))
-            self.viewport().update()
 
     def handle_contents_change(self, position, chars_removed, chars_added):
         """
-        Handle content changes to update misspelled words.
+        Update misspelled words efficiently.
         """
-        # Clear misspelled words affected by the change
+        if not self.spell_check_enabled:
+            return
+
+        # Skip rechecking all words; only check near the edited position
         self.recheck_all_words()
 
     def paintEvent(self, event):
+        """
+        Custom rendering for misspelled words.
+        """
         super().paintEvent(event)
+
         if not self.spell_check_enabled or not self.misspelled_words:
             return
-        
+
         painter = QPainter(self.viewport())
         painter.setPen(QColor("red"))
 
@@ -80,19 +82,18 @@ class CustomSpellCheckTextEdit(QTextEdit):
             self.draw_red_line(start, end, painter)
 
     def draw_red_line(self, start, end, painter):
+        """
+        Draw red underline for misspelled words.
+        """
         document = self.document()
-
-        if start < 0 or end > document.characterCount() - 1:
-            return
-
         cursor = self.textCursor()
+
         cursor.setPosition(start)
         word_start_rect = self.cursorRect(cursor)
 
         cursor.setPosition(end)
         word_end_rect = self.cursorRect(cursor)
 
-        # Prevent the underline from extending beyond the current line
         if word_start_rect.top() == word_end_rect.top():
             line_start = word_start_rect.bottomLeft()
             line_end = word_end_rect.bottomRight()
@@ -127,6 +128,7 @@ class WordProcessor(QMainWindow):
             background: white;
             border: 1px solid #ccc;
         """)
+        
         self.page_widget.setFixedSize(page_width, page_height)
 
         # Create the text editor
@@ -139,7 +141,7 @@ class WordProcessor(QMainWindow):
         doc = self.text_edit.document()
         root_frame = doc.rootFrame()
         frame_format = root_frame.frameFormat()
-        margin_bias = 8
+        margin_bias = 0
         frame_format.setLeftMargin(margin_pixels-margin_bias)
         frame_format.setRightMargin(margin_pixels-margin_bias)
         frame_format.setTopMargin(margin_pixels-margin_bias)
@@ -163,6 +165,9 @@ class WordProcessor(QMainWindow):
         # Create menus and toolbars
         self.create_menu()
         self.create_toolBar()
+
+        # Connect textChanged signal to update_word_count
+        self.text_edit.textChanged.connect(self.update_word_count)
 
     def create_menu(self):
         menu_bar = self.menuBar()
@@ -270,8 +275,11 @@ class WordProcessor(QMainWindow):
                 self.text_edit.clear()
         else:
             self.text_edit.clear()
-
+    '''
     def open_file(self):
+        """
+        Open and load a file into the editor with optimized performance.
+        """
         options = QFileDialog.Options()
         file_path, _ = QFileDialog.getOpenFileName(
             self, "Open File", "",
@@ -281,12 +289,22 @@ class WordProcessor(QMainWindow):
 
         if file_path:
             try:
-                with open(file_path, 'r') as file:
+                # Open and read the file
+                with open(file_path, 'r', encoding='utf-8') as file:
                     content = file.read()
-                    self.text_edit.setText(content)
+
+                # Temporarily disable signals and rendering
+                self.text_edit.blockSignals(True)
+                self.text_edit.spell_check_enabled = False
+                self.text_edit.clear()
+                self.text_edit.setPlainText(content)
+                self.text_edit.blockSignals(False)
+
+                # Re-enable spell-checking after loading
+                QTimer.singleShot(500, self.text_edit.recheck_all_words)
+
             except Exception as e:
-                QMessageBox.critical(
-                    self, "Error", f"Could not open file: {e}")
+                QMessageBox.critical(self, "Error", f"Could not open file: {e}")
 
     def save_file(self):
         options = QFileDialog.Options()
@@ -295,7 +313,7 @@ class WordProcessor(QMainWindow):
             "Text Files (*.txt);;All Files (*)",
             options=options
         )
-
+    
         if file_path:
             try:
                 with open(file_path, 'w') as file:
@@ -304,38 +322,133 @@ class WordProcessor(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(
                     self, "Error", f"Could not save file: {e}")
+    '''
+    def save_file(self):
+        """
+        Save the document in the desired format.
+        """
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save File", "",
+            "Rich Text Format (*.rtf);;Text Files (*.txt);;PDF Files (*.pdf);;All Files (*)",
+            options=options
+        )
+
+        if file_path:
+            try:
+                if file_path.endswith(".pdf"):
+                    # Save as PDF
+                    printer = QPrinter(QPrinter.HighResolution)
+                    printer.setOutputFormat(QPrinter.PdfFormat)
+                    printer.setOutputFileName(file_path)
+                    printer.setPageSize(QPrinter.Letter)
+                    self.text_edit.document().print_(printer)
+                elif file_path.endswith(".rtf"):
+                    # Save as RTF
+                    with open(file_path, 'w', encoding='utf-8') as file:
+                        content = self.text_edit.document().toHtml()
+                        file.write(content)
+                else:
+                    # Save as plain text
+                    with open(file_path, 'w', encoding='utf-8') as file:
+                        content = self.text_edit.toPlainText()
+                        file.write(content)
+
+                QMessageBox.information(self, "File Saved", "File saved successfully!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Could not save file: {e}")
+
+    def open_file(self):
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open File", "",
+            "Rich Text Format (*.rtf);;Text Files (*.txt);;All Files (*)",
+            options=options
+        )
+
+        if file_path:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as file:
+                    content = file.read()
+
+                # Temporarily disable the spell checker and signals
+                self.text_edit.blockSignals(True)
+                self.text_edit.spell_check_enabled = False
+
+                if file_path.endswith(".rtf"):
+                    # Load RTF content
+                    self.text_edit.setHtml(content)
+                else:
+                    # Load plain text content
+                    self.text_edit.setPlainText(content)
+
+                # Re-enable spell checking and signals
+                self.text_edit.blockSignals(False)
+
+                # Recheck spelling asynchronously
+                QTimer.singleShot(500, self.text_edit.recheck_all_words)
+
+                QMessageBox.information(self, "File Opened", "File opened successfully!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Could not open file: {e}")
 
     def create_toolBar(self):
-        toolBar = self.addToolBar("Bold")
-        toolBar.setIconSize(QSize(17, 17))
-        toolBar.addActions([self.new_action, self.save_action])
-        toolBar.addSeparator()
-        toolBar.addActions([self.copy_action, self.paste_action])
+        self.toolBar = self.addToolBar("Bold")
+        self.toolBar.setIconSize(QSize(17, 17))
+        self.toolBar.addActions([self.new_action, self.save_action])
+        self.toolBar.addSeparator()
+        self.toolBar.addActions([self.copy_action, self.paste_action])
 
-        toolBar.addSeparator()
+        self.toolBar.addSeparator()
         self.font_combo_box = QFontComboBox(self)
         self.font_size_combo_box = QComboBox(self)
+        default_font_family = "Times New Roman"
+        index = self.font_combo_box.findText(default_font_family)
+        if index != -1:
+            self.font_combo_box.setCurrentIndex(index)
         self.font_size_combo_box.addItems(
             [str(size) for size in range(8, 65, 2)])
         self.font_combo_box.currentFontChanged.connect(self.change_font)
         self.font_size_combo_box.currentTextChanged.connect(
             self.change_font_size)
-        toolBar.addWidget(self.font_combo_box)
-        toolBar.addWidget(self.font_size_combo_box)
-        toolBar.addSeparator()
-        toolBar.addActions([self.bold_action, self.italic_action,
+        default_font_size = 12  # The default font size
+        index = self.font_size_combo_box.findText(str(default_font_size))
+        if index != -1:
+            self.font_size_combo_box.setCurrentIndex(index)
+        self.toolBar.addWidget(self.font_combo_box)
+        self.toolBar.addWidget(self.font_size_combo_box)
+        self.toolBar.addSeparator()
+        self.toolBar.addActions([self.bold_action, self.italic_action,
                            self.underline_action, self.strikethrough_action])
-        toolBar.addSeparator()
-        toolBar.addActions([self.align_left, self.align_center,
+        self.toolBar.addSeparator()
+        self.toolBar.addActions([self.align_left, self.align_center,
                            self.align_right, self.align_justify])
         
         #spell Check Toggle Button
-        toolBar.addSeparator() 
+        self.toolBar.addSeparator() 
         self.spell_check_action = QAction(QIcon("icons/spell_check_icon.png"), "Toggle Spell Check", self)
         self.spell_check_action.setCheckable(True)
         self.spell_check_action.setChecked(True)  # Default: Enabled
         self.spell_check_action.triggered.connect(self.toggle_spell_check)
-        toolBar.addAction(self.spell_check_action)
+        self.toolBar.addAction(self.spell_check_action)
+
+        self.toolBar.addSeparator()
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.toolBar.addWidget(spacer)
+        # Add word count label to the toolbar
+        self.word_count_label = QLabel("Word Count: 0")
+        self.word_count_label.setContentsMargins(0, 0, 10, 0)
+        self.toolBar.addWidget(self.word_count_label)  # Display word count in the toolbar
+
+    def update_word_count(self):
+        """
+        Update the word count displayed in the toolbar.
+        """
+        text = self.text_edit.toPlainText()
+        words = re.findall(r'\b\w+\b', text)
+        word_count = len(words)
+        self.word_count_label.setText(f"Words: {word_count}")
 
     def toggle_align_right(self):
         cursor = self.text_edit.textCursor()
@@ -406,6 +519,8 @@ class WordProcessor(QMainWindow):
             self.text_edit.setAlignment(Qt.AlignJustify)
 
     def change_font(self, font: QFont):
+        current_font_size = self.text_edit.currentFont().pointSize()
+        font.setPointSize(current_font_size)
         self.text_edit.setCurrentFont(font)
 
     def change_font_size(self, size: str):
@@ -501,6 +616,23 @@ class LockdownWordProcessor(WordProcessor):
         lockdown_action = QAction("Enable Lockdown Mode", self)
         lockdown_action.triggered.connect(self.enable_lockdown_mode)
         tools_menu.addAction(lockdown_action)
+
+        self.hide_toolbar_action = QAction("Hide Toolbar", self)
+        self.hide_toolbar_action.triggered.connect(self.toggle_toolbar_visibility)
+        tools_menu.addAction(self.hide_toolbar_action)
+
+    def toggle_toolbar_visibility(self):
+        """
+        Toggle the visibility of the toolbar and update the action text.
+        """
+        is_visible = self.toolBar.isVisible()
+        self.toolBar.setVisible(not is_visible)  # Toggle visibility
+
+        # Update the action text based on the new state
+        if is_visible:
+            self.hide_toolbar_action.setText("Show Toolbar")
+        else:
+            self.hide_toolbar_action.setText("Hide Toolbar")
 
     def enable_lockdown_mode(self):
         if self.lockdown_enabled:
