@@ -641,26 +641,25 @@ class LockdownWordProcessor(WordProcessor):
     def add_lockdown_menu(self):
         tools_menu = self.tools_menu
 
-        lockdown_action = QAction("Enable Lockdown Mode", self)
+        lockdown_action = QAction(QIcon("icons/lockdown.png"), "Enable Lockdown Mode", self)
         lockdown_action.triggered.connect(self.enable_lockdown_mode)
         tools_menu.addAction(lockdown_action)
 
-        self.hide_toolbar_action = QAction("Hide Toolbar", self)
+        self.hide_toolbar_action = QAction(QIcon("icons/hide.png"), "Hide Toolbar", self)
         self.hide_toolbar_action.triggered.connect(self.toggle_toolbar_visibility)
         tools_menu.addAction(self.hide_toolbar_action)
 
-    def toggle_toolbar_visibility(self):
-        """
-        Toggle the visibility of the toolbar and update the action text.
-        """
+    def toggle_toolbar_visibility(self):        
         is_visible = self.toolBar.isVisible()
         self.toolBar.setVisible(not is_visible)  # Toggle visibility
 
         # Update the action text based on the new state
         if is_visible:
             self.hide_toolbar_action.setText("Show Toolbar")
+            self.hide_toolbar_action.setIcon(QIcon("icons/show.png"))
         else:
             self.hide_toolbar_action.setText("Hide Toolbar")
+            self.hide_toolbar_action.setIcon(QIcon("icons/hide.png"))
 
     def enable_lockdown_mode(self):
         if self.lockdown_enabled:
