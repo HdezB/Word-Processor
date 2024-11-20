@@ -277,54 +277,7 @@ class WordProcessor(QMainWindow):
                 self.text_edit.clear()
         else:
             self.text_edit.clear()
-    '''
-    def open_file(self):
-        """
-        Open and load a file into the editor with optimized performance.
-        """
-        options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open File", "",
-            "Text Files (*.txt);;All Files (*)",
-            options=options
-        )
-
-        if file_path:
-            try:
-                # Open and read the file
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    content = file.read()
-
-                # Temporarily disable signals and rendering
-                self.text_edit.blockSignals(True)
-                self.text_edit.spell_check_enabled = False
-                self.text_edit.clear()
-                self.text_edit.setPlainText(content)
-                self.text_edit.blockSignals(False)
-
-                # Re-enable spell-checking after loading
-                QTimer.singleShot(500, self.text_edit.recheck_all_words)
-
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Could not open file: {e}")
-
-    def save_file(self):
-        options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save File", "",
-            "Text Files (*.txt);;All Files (*)",
-            options=options
-        )
-    
-        if file_path:
-            try:
-                with open(file_path, 'w') as file:
-                    content = self.text_edit.toPlainText()
-                    file.write(content)
-            except Exception as e:
-                QMessageBox.critical(
-                    self, "Error", f"Could not save file: {e}")
-    '''
+            
     def save_file(self):
         #file dialog to select save location and file format
         options = QFileDialog.Options()
