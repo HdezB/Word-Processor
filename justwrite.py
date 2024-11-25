@@ -169,6 +169,28 @@ class WordProcessor(QMainWindow):
         #connect textChanged signal to update_word_count
         self.text_edit.textChanged.connect(self.update_word_count)
 
+        # Connect cursorPositionChanged signal to update font display
+        self.text_edit.cursorPositionChanged.connect(self.update_font_display)
+
+    # Method to update font and font size combo boxes
+    def update_font_display(self):
+        cursor = self.text_edit.textCursor()
+        if not cursor.isNull():
+            # Get the current font at the cursor position
+            current_font = cursor.charFormat().font()
+
+            # Update the font combo box
+            font_family = current_font.family()
+            font_index = self.font_combo_box.findText(font_family)
+            if font_index != -1:
+                self.font_combo_box.setCurrentIndex(font_index)
+
+            # Update the font size combo box
+            font_size = current_font.pointSize()
+            font_size_index = self.font_size_combo_box.findText(str(font_size))
+            if font_size_index != -1:
+                self.font_size_combo_box.setCurrentIndex(font_size_index)
+
     #function for main menu bar (includes file menu, edit menu, format menu, layout menu, and tools menu)
     def create_menu(self):
         menu_bar = self.menuBar()
@@ -266,17 +288,39 @@ class WordProcessor(QMainWindow):
         self.tools_menu = menu_bar.addMenu("Tools")
 
     def new_file(self):
-        #check if there is text to be saved, prompt user to save if there is
+        # Check if there is text to be saved, prompt user to save if there is
         if self.text_edit.toPlainText().strip():
             reply = QMessageBox.question(self, "Unsaved Changes",
-                                         "Do you want to save changes?",
-                                         QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
+                                        "Do you want to save changes?",
+                                        QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel)
             if reply == QMessageBox.Yes:
                 self.save_file()
-            elif reply == QMessageBox.No:
-                self.text_edit.clear()
-        else:
-            self.text_edit.clear()
+            elif reply == QMessageBox.Cancel:
+                return
+
+        # Clear the text editor
+        self.text_edit.clear()
+
+        # Reapply margins to the document's rootFrame
+        doc = self.text_edit.document()
+        root_frame = doc.rootFrame()
+        frame_format = root_frame.frameFormat()
+
+        # Calculate the margins 
+        screen = QApplication.primaryScreen()
+        dpi = screen.logicalDotsPerInch()
+        margin_pixels = int(1 * dpi)  
+
+        frame_format.setLeftMargin(margin_pixels)
+        frame_format.setRightMargin(margin_pixels)
+        frame_format.setTopMargin(margin_pixels)
+        frame_format.setBottomMargin(margin_pixels)
+        root_frame.setFrameFormat(frame_format)
+
+        # Reset the cursor to the starting position
+        cursor = QTextCursor(doc)
+        self.text_edit.setTextCursor(cursor)
+
             
     def save_file(self):
         #file dialog to select save location and file format
@@ -349,7 +393,7 @@ class WordProcessor(QMainWindow):
     #function to create toolbar and set properties
     def create_toolBar(self):
         self.toolBar = self.addToolBar("Bold")
-        self.toolBar.setIconSize(QSize(20, 20))
+        self.toolBar.setIconSize(QSize(35, 35))
         #add file operations (new, save)
         self.toolBar.addActions([self.new_action, self.save_action])
         
@@ -361,6 +405,7 @@ class WordProcessor(QMainWindow):
         #add font selection dropdown
         self.toolBar.addSeparator()
         self.font_combo_box = QFontComboBox(self)
+        #self.font_combo_box.setEditable(False)
         self.font_size_combo_box = QComboBox(self)
         default_font_family = "Times New Roman"
         index = self.font_combo_box.findText(default_font_family)
@@ -377,6 +422,7 @@ class WordProcessor(QMainWindow):
         index = self.font_size_combo_box.findText(str(default_font_size))
         if index != -1:
             self.font_size_combo_box.setCurrentIndex(index)
+        #self.font_size_combo_box.setEditable(False)
         self.toolBar.addWidget(self.font_combo_box)
         self.toolBar.addWidget(self.font_size_combo_box)
 
@@ -489,17 +535,43 @@ class WordProcessor(QMainWindow):
         else:
             self.text_edit.setAlignment(Qt.AlignJustify)
 
-    #function to change font
+    # Function to change font
     def change_font(self, font: QFont):
-        current_font_size = self.text_edit.currentFont().pointSize()
-        font.setPointSize(current_font_size)
-        self.text_edit.setCurrentFont(font)
+        cursor = self.text_edit.textCursor()  # Get the current cursor position
 
-    #function to change font size
+        if cursor.hasSelection():
+            # Apply the font to the selected text
+            char_format = QTextCharFormat()
+            char_format.setFont(font)
+            cursor.mergeCharFormat(char_format)
+        else:
+            # Apply the font to the cursor's character format for subsequent typing
+            char_format = self.text_edit.currentCharFormat()
+            char_format.setFont(font)
+            cursor.setCharFormat(char_format)
+
+        self.text_edit.setTextCursor(cursor)  # Restore the cursor position
+        self.text_edit.setFocus()  # Ensure focus returns to the text editor
+
+    # Function to change font size
     def change_font_size(self, size: str):
-        font = self.text_edit.currentFont()
-        font.setPointSize(int(size))
-        self.text_edit.setCurrentFont(font)
+        cursor = self.text_edit.textCursor()  # Get the current cursor position
+
+        if cursor.hasSelection():
+            # Apply the font size to the selected text
+            char_format = QTextCharFormat()
+            char_format.setFontPointSize(float(size))  # Use float for compatibility
+            cursor.mergeCharFormat(char_format)
+        else:
+            # Apply the font size to the cursor's character format for subsequent typing
+            char_format = self.text_edit.currentCharFormat()
+            char_format.setFontPointSize(float(size))
+            cursor.setCharFormat(char_format)
+
+        self.text_edit.setTextCursor(cursor)  # Restore the cursor position
+        self.text_edit.setFocus()  # Ensure focus returns to the text editor
+
+
 
     #function to toggle spell check
     def toggle_spell_check(self):
