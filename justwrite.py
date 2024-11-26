@@ -396,7 +396,7 @@ class WordProcessor(QMainWindow):
         self.toolBar.setIconSize(QSize(35, 35))
         #add file operations (new, save)
         self.toolBar.addActions([self.new_action, self.save_action])
-        
+
 
         #add edition operations (copy, paste)
         self.toolBar.addSeparator()
@@ -430,6 +430,10 @@ class WordProcessor(QMainWindow):
         self.toolBar.addSeparator()
         self.toolBar.addActions([self.bold_action, self.italic_action,
                            self.underline_action, self.strikethrough_action])
+        self.bold_action.setCheckable(True)
+        self.italic_action.setCheckable(True)
+        self.underline_action.setCheckable(True)
+        self.strikethrough_action.setCheckable(True)
         
         #add text alighnment actions (left, right, center, justify)
         self.toolBar.addSeparator()
@@ -452,7 +456,7 @@ class WordProcessor(QMainWindow):
 
         #add word count label 
         self.word_count_label = QLabel("Word Count: 0")
-        self.word_count_label.setContentsMargins(0, 0, 10, 0)
+        self.word_count_label.setContentsMargins(0, 0, 30, 0)
         self.toolBar.addWidget(self.word_count_label)  # Display word count in the toolbar
 
     #update word count displayed in tool bar
@@ -716,6 +720,8 @@ class LockdownWordProcessor(WordProcessor):
         self.hide_toolbar_action = QAction(QIcon("icons/hide.png"), "Hide Toolbar", self)
         self.hide_toolbar_action.triggered.connect(self.toggle_toolbar_visibility)
         self.tools_menu.addAction(self.hide_toolbar_action)
+
+        self.tools_menu.addAction(self.spell_check_action)
 
     def toggle_lockdown_mode(self):
         if not self.lockdown_enabled:
