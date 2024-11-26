@@ -1,7 +1,6 @@
 import sys
-
-import re 
-
+import os
+import re
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTextEdit, QDialog, QPushButton, QGridLayout,
     QFileDialog, QMessageBox, QInputDialog, QLineEdit, QAction, QUndoStack, QUndoCommand, QFontDialog, QShortcut, QFontComboBox, QLabel, QMenu, QComboBox
@@ -12,6 +11,8 @@ from PyQt5.QtGui import QIcon, QFont, QTextCursor, QTextBlockFormat, QKeySequenc
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 
 from spellchecker import SpellChecker
+
+basedir = os.path.dirname(__file__)
 
 #Custom QTextEdit widget that integrates spell-checker
 class CustomSpellCheckTextEdit(QTextEdit):
@@ -107,7 +108,7 @@ class WordProcessor(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("JustWrite")
-        self.setWindowIcon(QIcon('icons/logo.png'))
+        self.setWindowIcon(QIcon(os.path.join(basedir,'icons/logo.png')))
         self.setGeometry(100, 100, 800, 600)
 
         #initialize spell checker
@@ -169,6 +170,13 @@ class WordProcessor(QMainWindow):
         #connect textChanged signal to update_word_count
         self.text_edit.textChanged.connect(self.update_word_count)
 
+    def _get_set_icon_qaction(self, icon, name):
+        return QAction(self._get_qicon(icon), name, self)
+    
+    def _get_qicon(self, icon):
+        file_name = os.path.join(basedir,f"icons/{icon}.png")
+        return QIcon(file_name)
+    
     #function for main menu bar (includes file menu, edit menu, format menu, layout menu, and tools menu)
     def create_menu(self):
         menu_bar = self.menuBar()
@@ -178,19 +186,19 @@ class WordProcessor(QMainWindow):
         layout_menu = menu_bar.addMenu("Layout")
         
         #new File
-        self.new_action = QAction(QIcon("icons/new_file_icon.png"), "New", self)
+        self.new_action = self._get_set_icon_qaction("new_file_icon", "New")
         self.new_action.setShortcut("Ctrl+N")
         self.new_action.triggered.connect(self.new_file)
         #open File
-        open_action = QAction(QIcon("icons/open_folder_icon.png"), "Open", self)
+        open_action = self._get_set_icon_qaction("open_folder_icon", "Open")
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self.open_file)
         #save File
-        self.save_action = QAction(QIcon("icons/save_icon.png"), "Save", self)
+        self.save_action = self._get_set_icon_qaction("save_icon", "Save")
         self.save_action.setShortcut("Ctrl+S")
         self.save_action.triggered.connect(self.save_file)
         #exit File
-        exit_action = QAction(QIcon("icons/exit_icon.png"), "Exit", self)
+        exit_action = self._get_set_icon_qaction("exit_icon", "Exit")
         exit_action.triggered.connect(self.close)
 
         file_menu.addActions([self.new_action, open_action, self.save_action, exit_action])
@@ -198,18 +206,18 @@ class WordProcessor(QMainWindow):
         #edit Menu Bar
         #copy
         #<a href="https://www.freepik.com/search">Icon by Anggara</a>
-        self.copy_action = QAction(QIcon("icons/copy_icon.png"), "Copy", self)
+        self.copy_action = self._get_set_icon_qaction("copy_icon", "Copy")
         self.copy_action.setShortcut("Ctrl+C")
         self.copy_action.triggered.connect(self.toggle_copy)
 
         #paste
         #<a href="https://www.freepik.com/search">Icon by Pixel perfect</a>
-        self.paste_action = QAction(QIcon("icons/paste_icon.png"), "Paste", self)
+        self.paste_action = self._get_set_icon_qaction("paste_icon", "Paste")
         self.paste_action.setShortcut("Ctrl+V")
         self.paste_action.triggered.connect(self.toggle_paste)
 
         #cut
-        self.cut_action = QAction(QIcon("icons/cut_icon.png"), "Cut", self)
+        self.cut_action = self._get_set_icon_qaction("cut_icon", "Cut")
         self.cut_action.setShortcut("Ctrl+X")
         self.cut_action.triggered.connect(self.toggle_cut)
 
@@ -217,47 +225,42 @@ class WordProcessor(QMainWindow):
         
         #format menu
         #bold
-        self.bold_action = QAction(QIcon("icons/bold_icon.png"), "Bold", self)
+        self.bold_action = self._get_set_icon_qaction("bold_icon", "Bold")
         self.bold_action.setShortcut("Ctrl+B")
         self.bold_action.triggered.connect(self.toggle_bold)
 
         #italic
-        self.italic_action = QAction(QIcon("icons/italic_icon.png"), "Italic", self)
+        self.italic_action = self._get_set_icon_qaction("italic_icon", "Italic")
         self.italic_action.setShortcut("Ctrl+I")
         self.italic_action.triggered.connect(self.toggle_italic)
 
         #underline
-        self.underline_action = QAction(
-            QIcon("icons/underline_icon.png"), "Underline", self)
+        self.underline_action = self._get_set_icon_qaction("underline_icon", "Underline")
         self.underline_action.setShortcut("Ctrl+U")
         self.underline_action.triggered.connect(self.toggle_underline)
 
         #strikethrough
-        self.strikethrough_action = QAction(
-            QIcon("icons/strikethrough_icon.png"), "Strikethrough", self)
+        self.strikethrough_action = self._get_set_icon_qaction("strikethrough_icon", "Strikethrough")
         self.strikethrough_action.setShortcut("Ctrl+Shift+S")
         self.strikethrough_action.triggered.connect(self.toggle_strikethrough)
 
         format_menu.addActions([self.bold_action, self.italic_action, self.underline_action, self.strikethrough_action])
         
         #layout
-        self.align_left = QAction(QIcon("icons/align_left.png"), "Align Left", self)
+        self.align_left = self._get_set_icon_qaction("align_left", "Left Align")
         self.align_left.setCheckable(True)
         self.align_left.setChecked(True)
         self.align_left.triggered.connect(self.toggle_align_left)
 
-        self.align_center = QAction(
-            QIcon("icons/align_center.png"), "Align Center", self)
+        self.align_center = self._get_set_icon_qaction("align_center", "Center Align")
         self.align_center.setCheckable(True)
         self.align_center.triggered.connect(self.toggle_align_center)
 
-        self.align_right = QAction(
-            QIcon("icons/align_right.png"), "Align Right", self)
+        self.align_right = self._get_set_icon_qaction("align_right", "Right Align")
         self.align_right.setCheckable(True)
         self.align_right.triggered.connect(self.toggle_align_right)
 
-        self.align_justify = QAction(
-            QIcon("icons/align_justify.png"), "Align Justify", self)
+        self.align_justify = self._get_set_icon_qaction("align_justify", "Justify Align")
         self.align_justify.setCheckable(True)
         self.align_justify.triggered.connect(self.toggle_align_justify)
 
@@ -392,7 +395,7 @@ class WordProcessor(QMainWindow):
         
         #add spell check toggle
         self.toolBar.addSeparator() 
-        self.spell_check_action = QAction(QIcon("icons/spell_check_icon.png"), "Toggle Spell Check", self)
+        self.spell_check_action = self._get_set_icon_qaction("spell_check_icon", "Toggle Spell Check")
         self.spell_check_action.setCheckable(True)
         self.spell_check_action.setChecked(True)  # Default: Enabled
         self.spell_check_action.triggered.connect(self.toggle_spell_check)
@@ -637,11 +640,11 @@ class LockdownWordProcessor(WordProcessor):
     def add_lockdown_menu(self):
         tools_menu = self.tools_menu
 
-        self.lockdown_action = QAction(QIcon("icons/lock.png"), "Enable Lockdown Mode", self)
+        self.lockdown_action = self._get_set_icon_qaction("lock", "Enable Lockdown Mode")
         self.lockdown_action.triggered.connect(self.toggle_lockdown_mode)
         tools_menu.addAction(self.lockdown_action)
 
-        self.hide_toolbar_action = QAction(QIcon("icons/hide.png"), "Hide Toolbar", self)
+        self.hide_toolbar_action = self._get_set_icon_qaction("hide", "Hide Toolbar")
         self.hide_toolbar_action.triggered.connect(self.toggle_toolbar_visibility)
         self.tools_menu.addAction(self.hide_toolbar_action)
 
@@ -658,10 +661,10 @@ class LockdownWordProcessor(WordProcessor):
         # Update the action text based on the new state
         if is_visible:
             self.hide_toolbar_action.setText("Show Toolbar")
-            self.hide_toolbar_action.setIcon(QIcon("icons/show.png"))
+            self.hide_toolbar_action.setIcon(self._get_qicon("show"))
         else:
             self.hide_toolbar_action.setText("Hide Toolbar")
-            self.hide_toolbar_action.setIcon(QIcon("icons/hide.png"))
+            self.hide_toolbar_action.setIcon(self._get_qicon("hide"))
 
     def enable_lockdown_mode(self):
         # Create and display the timer dialog
@@ -690,7 +693,7 @@ class LockdownWordProcessor(WordProcessor):
 
                 # Update the menu action text
                 self.lockdown_action.setText("Disable Lockdown Mode")
-                self.lockdown_action.setIcon(QIcon("icons/unlock.png"))
+                self.lockdown_action.setIcon(self._get_qicon("unlock"))
 
                 # Inform the user that Lockdown Mode has been activated
                 QMessageBox.information(
@@ -796,7 +799,7 @@ class LockdownWordProcessor(WordProcessor):
 
         # Update the menu action text
         self.lockdown_action.setText("Enable Lockdown Mode")
-        self.lockdown_action.setIcon(QIcon("icons/lock.png"))
+        self.lockdown_action.setIcon(self._get_qicon("lock"))
 
     def closeEvent(self, event):
         if self.lockdown_enabled:
