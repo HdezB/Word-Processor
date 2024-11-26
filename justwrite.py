@@ -29,6 +29,48 @@ class CustomSpellCheckTextEdit(QTextEdit):
         #connects content change signal of document to spell check so words can be rechecked for spelling
         self.document().contentsChange.connect(self.handle_contents_change)
 
+    def insertFromMimeData(self, source):
+        """
+        Override the default paste behavior to enforce margins and normalize content.
+        """
+        # Get the plain text content from the source
+        text = source.text()
+
+        # Insert plain text to remove formatting
+        self.textCursor().insertText(text)
+
+        # Reapply margins to the document's root frame
+        self.reapply_margins()
+
+    def reapply_margins(self):
+        """
+        Reapply margins to ensure content stays within the defined boundaries.
+        """
+        doc = self.document()
+        root_frame = doc.rootFrame()
+        frame_format = root_frame.frameFormat()
+
+        # Calculate the margins (assuming 1-inch margins based on DPI)
+        screen = QApplication.primaryScreen()
+        dpi = screen.logicalDotsPerInch()
+        margin_pixels = int(1 * dpi)
+
+        frame_format.setLeftMargin(margin_pixels)
+        frame_format.setRightMargin(margin_pixels)
+        frame_format.setTopMargin(margin_pixels)
+        frame_format.setBottomMargin(margin_pixels)
+
+        root_frame.setFrameFormat(frame_format)
+
+    def keyPressEvent(self, event):
+        """
+        Ensure typing stays within the document boundaries.
+        """
+        super().keyPressEvent(event)
+
+        # Reapply margins to ensure content remains constrained
+        self.reapply_margins()
+
     #toggles spell check on or off, rechecking all words if enabled
     def toggle_spell_check(self):
         self.spell_check_enabled = not self.spell_check_enabled
@@ -173,6 +215,7 @@ class WordProcessor(QMainWindow):
         self.text_edit.cursorPositionChanged.connect(self.update_font_display)
 
     # Method to update font and font size combo boxes
+    # Method to update font and font size combo boxes
     def update_font_display(self):
         cursor = self.text_edit.textCursor()
         if not cursor.isNull():
@@ -182,15 +225,18 @@ class WordProcessor(QMainWindow):
             # Update the font combo box
             font_family = current_font.family()
             font_index = self.font_combo_box.findText(font_family)
-            if font_index != -1:
+            if font_index != -1 and self.font_combo_box.currentIndex() != font_index:
+                self.font_combo_box.blockSignals(True)  # Block signals temporarily
                 self.font_combo_box.setCurrentIndex(font_index)
+                self.font_combo_box.blockSignals(False)  # Restore signals
 
             # Update the font size combo box
             font_size = current_font.pointSize()
             font_size_index = self.font_size_combo_box.findText(str(font_size))
-            if font_size_index != -1:
+            if font_size_index != -1 and self.font_size_combo_box.currentIndex() != font_size_index:
+                self.font_size_combo_box.blockSignals(True)  # Block signals temporarily
                 self.font_size_combo_box.setCurrentIndex(font_size_index)
-
+                self.font_size_combo_box.blockSignals(False)  # Restore signals
     #function for main menu bar (includes file menu, edit menu, format menu, layout menu, and tools menu)
     def create_menu(self):
         menu_bar = self.menuBar()
@@ -380,6 +426,9 @@ class WordProcessor(QMainWindow):
                     #load txt content
                     self.text_edit.setPlainText(content)
 
+                # Reapply margins to the document's root frame
+                self.text_edit.reapply_margins()
+
                 #re-enable spell checker and signals 
                 self.text_edit.blockSignals(False)
 
@@ -396,7 +445,7 @@ class WordProcessor(QMainWindow):
         self.toolBar.setIconSize(QSize(35, 35))
         #add file operations (new, save)
         self.toolBar.addActions([self.new_action, self.save_action])
-
+        
 
         #add edition operations (copy, paste)
         self.toolBar.addSeparator()
@@ -430,10 +479,6 @@ class WordProcessor(QMainWindow):
         self.toolBar.addSeparator()
         self.toolBar.addActions([self.bold_action, self.italic_action,
                            self.underline_action, self.strikethrough_action])
-        self.bold_action.setCheckable(True)
-        self.italic_action.setCheckable(True)
-        self.underline_action.setCheckable(True)
-        self.strikethrough_action.setCheckable(True)
         
         #add text alighnment actions (left, right, center, justify)
         self.toolBar.addSeparator()
@@ -456,7 +501,7 @@ class WordProcessor(QMainWindow):
 
         #add word count label 
         self.word_count_label = QLabel("Word Count: 0")
-        self.word_count_label.setContentsMargins(0, 0, 30, 0)
+        self.word_count_label.setContentsMargins(0, 0, 10, 0)
         self.toolBar.addWidget(self.word_count_label)  # Display word count in the toolbar
 
     #update word count displayed in tool bar
@@ -720,8 +765,6 @@ class LockdownWordProcessor(WordProcessor):
         self.hide_toolbar_action = QAction(QIcon("icons/hide.png"), "Hide Toolbar", self)
         self.hide_toolbar_action.triggered.connect(self.toggle_toolbar_visibility)
         self.tools_menu.addAction(self.hide_toolbar_action)
-
-        self.tools_menu.addAction(self.spell_check_action)
 
     def toggle_lockdown_mode(self):
         if not self.lockdown_enabled:
